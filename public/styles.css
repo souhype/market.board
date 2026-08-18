@@ -855,15 +855,11 @@ news-ticker {
 
 .news-track {
   display: inline-flex;
-
   align-items: center;
-
   height: 100%;
-
   width: max-content;
 
-  animation:
-    newsScroll 45s linear infinite;
+  animation: newsScroll 320s linear infinite;
 }
 
 
@@ -876,22 +872,12 @@ news-ticker {
 
 .news-item {
   display: inline-flex;
-
   align-items: center;
-
-  gap:
-    clamp(8px, 0.45vw, 18px);
-
-  padding:
-    0 clamp(20px, 1.2vw, 46px);
-
+  gap: clamp(10px, 0.5vw, 20px);
+  padding: 0 clamp(24px, 1.4vw, 52px);
   color: var(--text-color);
-
   text-decoration: none;
-
-  font-size:
-    clamp(13px, 0.72vw, 28px);
-
+  font-size: clamp(18px, 1vw, 38px);
   white-space: nowrap;
 }
 

@@ -14,7 +14,7 @@ export default {
             return Response.json(payload, {
                 headers: {
                     "Cache-Control":
-                        "public, s-maxage=900, stale-while-revalidate=300",
+                        "public, s-maxage=1800, stale-while-revalidate=300",
                 },
             });
         } catch (error) {
