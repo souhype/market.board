@@ -47,12 +47,34 @@ type DashboardState = {
   assets: CryptoAsset[];
   compositionIndex: number;
   lastUpdated: string | null;
+  news: NewsItem[];
 };
+
+
+type NewsItem = {
+  id: string;
+  title: string;
+  source: string;
+  url: string;
+  publishedAt: string;
+};
+
+type NewsPayload = {
+  items: NewsItem[];
+  lastUpdated: string | null;
+};
+
 
 // ---------------------------------------------------------------------------
 // Central state + config (plain objects, no framework)
 // ---------------------------------------------------------------------------
-const state: DashboardState = { assets: [], compositionIndex: 0, lastUpdated: null };
+const state: DashboardState = {
+  assets: [],
+  compositionIndex: 0,
+  lastUpdated: null,
+  news: [],
+};
+
 
 // Sensible fallback config so the UI can render before /api/config resolves.
 let cfg: PublicConfig = {
@@ -235,12 +257,88 @@ class MarketHeader extends HTMLElement {
   }
 }
 
-/** Footer: structurally present, intentionally empty in v1. */
-class MarketFooter extends HTMLElement {
+class NewsTicker extends HTMLElement {
+  private items: NewsItem[] = [];
+
   connectedCallback() {
-    this.innerHTML = `<span class="ft-crypto">TOP ${cfg.cryptoTotal} BY MARKET CAP · LIVE CRYPTO FEED · CoinMarketCap</span>`;
+    this.innerHTML = `
+      <div class="news-label">
+        <span class="news-dot"></span>
+        BREAKING
+      </div>
+
+      <div class="news-viewport">
+        <div class="news-track"></div>
+      </div>
+    `;
+  }
+
+  setNews(items: NewsItem[]) {
+    this.items = items;
+
+    const track = this.querySelector(
+      ".news-track"
+    ) as HTMLElement | null;
+
+    if (!track || items.length === 0) return;
+
+    const html = items
+      .map(
+        (item) => `
+          <a
+            class="news-item"
+            href="${escapeHtml(item.url)}"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="news-source">
+              ${escapeHtml(item.source)}
+            </span>
+
+            <span class="news-title">
+              ${escapeHtml(item.title)}
+            </span>
+
+            <span class="news-separator">◆</span>
+          </a>
+        `
+      )
+      .join("");
+
+    // Duplicate the track so the ticker loops seamlessly.
+    track.innerHTML = html + html;
   }
 }
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+
+/** Footer: structurally present, intentionally empty in v1. */
+class MarketFooter extends HTMLElement {
+  ticker!: NewsTicker;
+
+  connectedCallback() {
+    this.innerHTML = "";
+
+    this.ticker = document.createElement(
+      "news-ticker"
+    ) as NewsTicker;
+
+    this.appendChild(this.ticker);
+  }
+
+  setNews(items: NewsItem[]) {
+    this.ticker.setNews(items);
+  }
+}
+
 
 /** Root component: owns rendering wiring for header + grid + footer. */
 class MarketBoard extends HTMLElement {
@@ -262,6 +360,8 @@ customElements.define("market-grid", MarketGrid);
 customElements.define("market-header", MarketHeader);
 customElements.define("market-footer", MarketFooter);
 customElements.define("market-board", MarketBoard);
+customElements.define("news-ticker", NewsTicker);
+
 
 // ===========================================================================
 // Application wiring
@@ -314,6 +414,32 @@ async function refreshData() {
   }
 }
 
+async function refreshNews() {
+  try {
+    const res = await fetch("/api/news", {
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const payload =
+      (await res.json()) as NewsPayload;
+
+    if (Array.isArray(payload.items)) {
+      state.news = payload.items;
+      board.footer.setNews(state.news);
+    }
+  } catch (err) {
+    console.warn(
+      "[frontend] news refresh failed:",
+      err
+    );
+  }
+}
+
+
 async function loadConfig() {
   try {
     const res = await fetch("/api/config", { cache: "no-store" });
@@ -359,10 +485,14 @@ async function main() {
   await loadConfig();
   startClock();
   await refreshData();
+  await refreshNews();
   renderCurrent();
 
   setInterval(rotate, cfg.rotationIntervalMs);
   setInterval(refreshData, cfg.apiRefreshIntervalMs);
+
+  // News is refreshed independently from market data.
+  setInterval(refreshNews, 15 * 60_000);
 }
 
 // Only auto-run in the browser (import.meta.main guards Bun test imports).

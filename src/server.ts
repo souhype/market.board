@@ -23,6 +23,8 @@ import { config, publicConfig } from "./config";
 import { startApp, getMarketPayload } from "./app";
 import { buildFrontend } from "./frontend";
 import { logoDiskPath, _paths } from "./cache";
+import { getNewsPayload } from "./news";
+
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -60,7 +62,7 @@ function serveLogo(pathname: string): Response {
   });
 }
 
-function handle(req: Request): Response {
+async function handle(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const { pathname } = url;
 
@@ -78,6 +80,8 @@ function handle(req: Request): Response {
       return serveStatic("dist/app.js", "text/javascript; charset=utf-8");
     case "/api/market":
       return json(getMarketPayload());
+    case "/api/news":
+      return json(await getNewsPayload());
     case "/api/config":
       return json(publicConfig(config));
     case "/health":
