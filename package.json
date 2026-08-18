@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "start": "bun run src/server.ts",
-    "dev": "bun --watch run src/server.ts",
+    "dev": "bun run src/frontend.ts && bun --watch run src/server.ts",
     "build": "bun run src/frontend.ts",
     "test": "bun test"
   },

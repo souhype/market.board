@@ -62,8 +62,24 @@ let cfg: PublicConfig = {
   cryptoTotal: 40,
   cryptoPerColumn: 10,
   compositionSize: 20,
-  layout: {},
-  typography: {},
+  layout: {
+    headerHeight: "clamp(90px, 3.9vw, 150px)",
+    footerHeight: "clamp(40px, 1.8vw, 70px)",
+    gridGap: "clamp(18px, 1.25vw, 48px)",
+    cardPadding:
+      "clamp(6px, 0.47vw, 18px) clamp(12px, 0.73vw, 28px)",
+  },
+
+  typography: {
+    titleFontSize: "clamp(42px, 2.03vw, 78px)",
+    subtitleFontSize: "clamp(13px, 0.68vw, 26px)",
+    clockFontSize: "clamp(34px, 1.67vw, 64px)",
+    cryptoNameFontSize: "clamp(21px, 1.04vw, 40px)",
+    priceFontSize: "clamp(21px, 1.04vw, 40px)",
+    marketCapFontSize: "clamp(14px, 0.73vw, 28px)",
+    changeFontSize: "clamp(17px, 0.89vw, 34px)",
+  },
+
   staleDataIndicatorEnabled: true,
   staleDataThresholdMs: 300_000,
   format: { priceFractionDigits: 2, marketCapFractionDigits: 2, percentageFractionDigits: 2 },
@@ -186,8 +202,8 @@ class MarketHeader extends HTMLElement {
   connectedCallback() {
     this.innerHTML = `
       <div class="hd-topline">
-        <span class="hd-terminal">MARKET TERMINAL — LIVE FEED</span>
-        <span class="hd-version">EST. TERMINAL V3.3</span>
+        <span class="hd-terminal">MARKET TERMINAL - LIVE FEED</span>
+        <span class="hd-version">EST. TERMINAL V0.13</span>
       </div>
       <div class="hd-main">
         <div class="hd-brand">
@@ -222,7 +238,7 @@ class MarketHeader extends HTMLElement {
 /** Footer: structurally present, intentionally empty in v1. */
 class MarketFooter extends HTMLElement {
   connectedCallback() {
-    this.innerHTML = `<span class="ft-crypto">TOP ${cfg.cryptoTotal} BY MARKET CAP · LIVE CRYPTO FEED</span>`;
+    this.innerHTML = `<span class="ft-crypto">TOP ${cfg.cryptoTotal} BY MARKET CAP · LIVE CRYPTO FEED · CoinMarketCap</span>`;
   }
 }
 

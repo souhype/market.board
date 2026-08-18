@@ -78,19 +78,20 @@ export const config: Config = {
   compositionSize: 20,
 
   // Layout dimensions
-  headerHeight: "150px",
-  footerHeight: "70px",
-  gridGap: "48px",
-  cardPadding: "18px 28px",
+  headerHeight: "clamp(90px, 3.9vw, 150px)",
+  footerHeight: "clamp(40px, 1.8vw, 70px)",
+  gridGap: "clamp(18px, 1.25vw, 48px)",
+  cardPadding: "clamp(6px, 0.47vw, 18px) clamp(12px, 0.73vw, 28px)",
 
   // Typography
-  titleFontSize: "78px",
-  subtitleFontSize: "26px",
-  clockFontSize: "64px",
-  cryptoNameFontSize: "40px",
-  priceFontSize: "40px",
-  marketCapFontSize: "28px",
-  changeFontSize: "34px",
+  titleFontSize: "clamp(42px, 2.03vw, 78px)",
+  subtitleFontSize: "clamp(13px, 0.68vw, 26px)",
+  clockFontSize: "clamp(34px, 1.67vw, 64px)",
+  cryptoNameFontSize: "clamp(21px, 1.04vw, 40px)",
+  priceFontSize: "clamp(21px, 1.04vw, 40px)",
+  marketCapFontSize: "clamp(14px, 0.73vw, 28px)",
+  changeFontSize: "clamp(17px, 0.89vw, 34px)",
+
 
   // Behaviour flags
   staleDataIndicatorEnabled: true,
