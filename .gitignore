@@ -1,0 +1,15 @@
+# Secrets — never commit the real key
+.env
+
+# Runtime cache (market data + downloaded logos)
+data/
+
+# Built frontend bundle
+public/dist/
+
+# Bun
+node_modules/
+bun.lockb
+
+README.
+maintainer.md

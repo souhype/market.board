@@ -1,0 +1,19 @@
+{
+  "name": "market-board",
+  "version": "1.0.0",
+  "description": "Unattended crypto digital-signage dashboard. Bun backend + dependency-free Web Components frontend.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "dev": "bun --watch run src/server.ts",
+    "build": "bun run src/frontend.ts",
+    "test": "bun test"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "dependencies": {
+    "@types/bun": "^1.3.14"
+  }
+}

@@ -1,0 +1,382 @@
+/* ==========================================================================
+   Market.Board — styles.css
+   Terminal / digital-signage aesthetic for a 65" 4K panel (3840 x 2160).
+   Dependency-free. All major visual settings are CSS custom properties so a
+   maintainer can retune colors/layout/typography from here + config.ts.
+   ========================================================================== */
+
+:root {
+  /* ---- Colors (single source of truth) ---- */
+  --accent-color: #c6f24e;
+  /* lime terminal accent */
+  --accent-dim: #7f9b34;
+  --positive-color: #4ade80;
+  /* green (24h up) */
+  --positive-bg: rgba(34, 197, 94, 0.14);
+  --negative-color: #f87171;
+  /* red (24h down) */
+  --negative-bg: rgba(248, 113, 113, 0.14);
+  --neutral-color: #9aa4b2;
+  /* flat */
+  --neutral-bg: rgba(154, 164, 178, 0.12);
+  --muted-color: #6b7684;
+  --text-color: #e7edf3;
+  --background-color: #05070a;
+  --panel-background: #0a0e13;
+  --card-background: #0d1218;
+  --border-color: #1b2530;
+  --grid-line: #141b23;
+
+  /* ---- Layout (overridden at runtime from config.ts via app.ts) ---- */
+  --header-height: 150px;
+  --footer-height: 70px;
+  --grid-gap: 48px;
+  --card-padding: 18px 28px;
+
+  /* ---- Typography ---- */
+  --title-font-size: 78px;
+  --subtitle-font-size: 26px;
+  --clock-font-size: 64px;
+  --crypto-name-font-size: 40px;
+  --price-font-size: 40px;
+  --market-cap-font-size: 28px;
+  --change-font-size: 34px;
+
+  /* ---- Animation ---- */
+  --transition-duration: 700ms;
+
+  --font: sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* the page must never scroll */
+  background: var(--background-color);
+  color: var(--text-color);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Root layout: header / grid / footer, fills the viewport ---- */
+market-board {
+  display: grid;
+  grid-template-rows: var(--header-height) 1fr var(--footer-height);
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+market-header {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 60px;
+  border-bottom: 2px solid var(--border-color);
+  background: linear-gradient(180deg, #070b10 0%, var(--background-color) 100%);
+}
+
+.hd-topline {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--subtitle-font-size);
+  letter-spacing: 0.18em;
+  color: var(--muted-color);
+  text-transform: uppercase;
+}
+
+.hd-version {
+  color: var(--accent-dim);
+}
+
+.hd-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hd-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 26px;
+}
+
+.hd-title {
+  font-size: var(--title-font-size);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--text-color);
+}
+
+.hd-title .dot {
+  color: var(--accent-color);
+}
+
+.hd-attrib {
+  font-size: var(--subtitle-font-size);
+  color: var(--muted-color);
+  letter-spacing: 0.08em;
+}
+
+.hd-pill {
+  font-size: 22px;
+  letter-spacing: 0.12em;
+  color: var(--background-color);
+  background: var(--accent-color);
+  padding: 6px 16px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.hd-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.hd-clock {
+  font-size: var(--clock-font-size);
+  font-weight: 700;
+  color: var(--accent-color);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.hd-meta {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: var(--subtitle-font-size);
+  color: var(--muted-color);
+  letter-spacing: 0.1em;
+}
+
+.hd-upd b {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.hd-stale {
+  color: var(--background-color);
+  background: var(--negative-color);
+  padding: 3px 12px;
+  border-radius: 4px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+/* ==========================================================================
+   Grid (two columns) + rotation transition
+   ========================================================================== */
+market-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--grid-gap);
+  padding: 40px 60px;
+  align-content: stretch;
+  /* subtle transition: opacity + small horizontal slide, no 3D/scale */
+  transition: opacity var(--transition-duration) ease,
+    transform var(--transition-duration) ease;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+market-grid.is-out {
+  opacity: 0;
+  transform: translateX(-28px);
+}
+
+.column {
+  display: grid;
+  grid-template-rows: repeat(10, 1fr);
+  gap: 12px;
+  min-height: 0;
+}
+
+/* ==========================================================================
+   Crypto card (row)
+   ========================================================================== */
+crypto-card {
+  display: grid;
+  grid-template-columns: 56px 72px 1fr auto auto 150px;
+  align-items: center;
+  gap: 22px;
+  padding: var(--card-padding);
+  background: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--accent-dim);
+  border-radius: 6px;
+}
+
+.cc-rank {
+  font-size: var(--market-cap-font-size);
+  font-weight: 700;
+  color: var(--accent-color);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cc-logo {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cc-logo img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: contain;
+}
+
+.cc-logo-fallback {
+  display: none;
+  /* shown by onerror when the logo image fails */
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--panel-background);
+  border: 1px solid var(--border-color);
+  color: var(--accent-color);
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.cc-id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cc-symbol {
+  font-size: var(--crypto-name-font-size);
+  font-weight: 700;
+  color: var(--text-color);
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+}
+
+.cc-name {
+  font-size: var(--market-cap-font-size);
+  color: var(--muted-color);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cc-mcap {
+  font-size: var(--market-cap-font-size);
+  color: var(--neutral-color);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cc-price {
+  font-size: var(--price-font-size);
+  font-weight: 600;
+  color: var(--text-color);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  min-width: 200px;
+}
+
+.cc-change {
+  font-size: var(--change-font-size);
+  font-weight: 700;
+  text-align: center;
+  padding: 8px 6px;
+  border-radius: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cc-change.up {
+  color: var(--positive-color);
+  background: var(--positive-bg);
+}
+
+.cc-change.down {
+  color: var(--negative-color);
+  background: var(--negative-bg);
+}
+
+.cc-change.flat {
+  color: var(--neutral-color);
+  background: var(--neutral-bg);
+}
+
+/* ==========================================================================
+   Footer (structurally present, minimal content in v1)
+   ========================================================================== */
+market-footer {
+  display: flex;
+  align-items: center;
+  padding: 0 60px;
+  border-top: 2px solid var(--border-color);
+  background: var(--panel-background);
+}
+
+.ft-crypto {
+  font-size: var(--subtitle-font-size);
+  color: var(--muted-color);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   Development fallback: keep it usable on a normal monitor. The primary and
+   only real target is 3840 x 2160 — this is NOT a responsive mobile design.
+   ========================================================================== */
+@media (max-width: 2200px) {
+  :root {
+    --header-height: 110px;
+    --footer-height: 48px;
+    --title-font-size: 46px;
+    --clock-font-size: 40px;
+    --crypto-name-font-size: 22px;
+    --price-font-size: 22px;
+    --market-cap-font-size: 16px;
+    --change-font-size: 18px;
+    --subtitle-font-size: 15px;
+    --grid-gap: 24px;
+    --card-padding: 8px 16px;
+  }
+
+  crypto-card {
+    grid-template-columns: 34px 42px 1fr auto auto 92px;
+    gap: 12px;
+  }
+
+  .cc-logo,
+  .cc-logo img,
+  .cc-logo-fallback {
+    width: 38px;
+    height: 38px;
+  }
+
+  .cc-price {
+    min-width: 110px;
+  }
+}
