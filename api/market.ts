@@ -41,41 +41,30 @@ function getFinnhubKey(): string {
     return process.env.FINNHUB_API_KEY?.trim() ?? "";
 }
 
-export default async function handler(request: Request): Promise<Response> {
-    if (request.method !== "GET") {
-        return new Response("Method not allowed", { status: 405 });
-    }
+// change this:
+// export default async function handler(request: Request): Promise<Response> {
 
+// to this:
+export async function GET(request: Request): Promise<Response> {
     try {
         const now = Date.now();
 
-        // Serve cached data when it is still fresh.
         if (cached && now - cachedAt < CACHE_TTL_MS) {
             return Response.json(cached, {
-                headers: {
-                    "Cache-Control":
-                        "public, s-maxage=300, stale-while-revalidate=60",
-                },
+                headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60" },
             });
         }
 
         const result = await fetchAllMarkets(getCmcKey(), getFinnhubKey());
 
-        // Log any non-fatal per-source issues (e.g. Finnhub rate limited) but
-        // don't fail the request over them.
         if (result.errors.length > 0) {
             console.warn("[api/market] source issues:", result.errors.join("; "));
         }
 
-        // Only treat a COMPLETELY empty result as a failure — otherwise a
-        // partial (e.g. crypto-only) list is still worth serving.
         if (result.assets.length === 0) {
             if (cached) {
                 return Response.json(cached, {
-                    headers: {
-                        "Cache-Control":
-                            "public, s-maxage=60, stale-while-revalidate=300",
-                    },
+                    headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
                 });
             }
             return Response.json(
@@ -85,7 +74,6 @@ export default async function handler(request: Request): Promise<Response> {
         }
 
         const payload: MarketPayload = {
-            // logoUrl is already a usable remote URL on every asset — no rewrite.
             assets: result.assets,
             lastUpdated: new Date().toISOString(),
         };
@@ -94,29 +82,17 @@ export default async function handler(request: Request): Promise<Response> {
         cachedAt = now;
 
         return Response.json(payload, {
-            headers: {
-                "Cache-Control":
-                    "public, s-maxage=300, stale-while-revalidate=60",
-            },
+            headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60" },
         });
     } catch (error) {
         console.error("[api/market]", error);
-
-        // Fall back to the last good response if we have one.
         if (cached) {
             return Response.json(cached, {
-                headers: {
-                    "Cache-Control":
-                        "public, s-maxage=60, stale-while-revalidate=300",
-                },
+                headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
             });
         }
-
         return Response.json(
-            {
-                error:
-                    error instanceof Error ? error.message : "Unknown error",
-            },
+            { error: error instanceof Error ? error.message : "Unknown error" },
             { status: 500 }
         );
     }
