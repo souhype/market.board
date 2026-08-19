@@ -260,11 +260,15 @@ class MarketHeader extends HTMLElement {
 class NewsTicker extends HTMLElement {
   private items: NewsItem[] = [];
 
+  // Tune this to taste — higher = faster scroll.
+
+  private static readonly PIXELS_PER_SECOND = 90;
+
   connectedCallback() {
     this.innerHTML = `
       <div class="news-label">
         <span class="news-dot"></span>
-        BREAKING
+        LIVE
       </div>
 
       <div class="news-viewport">
@@ -299,14 +303,23 @@ class NewsTicker extends HTMLElement {
               ${escapeHtml(item.title)}
             </span>
 
+            </a>
             <span class="news-separator">◆</span>
-          </a>
         `
       )
       .join("");
 
     // Duplicate the track so the ticker loops seamlessly.
     track.innerHTML = html + html;
+
+    // Reset animation so we can re-measure cleanly.
+    track.style.animation = "none";
+    // Force layout so scrollWidth reflects the new (doubled) content.
+    void track.offsetWidth;
+    // scrollWidth covers BOTH copies; translateX(-50%) only travels one copy's width.
+    const singleCopyWidth = track.scrollWidth / 2;
+    const durationSeconds = singleCopyWidth / NewsTicker.PIXELS_PER_SECOND;
+    track.style.animation = `newsScroll ${durationSeconds}s linear infinite`;
   }
 }
 

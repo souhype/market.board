@@ -781,26 +781,17 @@ news-ticker {
 .news-label {
   display: flex;
   align-items: center;
-
   flex-shrink: 0;
-
   height: 100%;
+  padding: 0 clamp(14px, 0.8vw, 30px);
 
-  padding:
-    0 clamp(14px, 0.8vw, 30px);
+  color: var(--background-color);
+  background: var(--accent-color);
 
-  color: #05070a;
-  background: var(--negative-color);
-
-  font-size:
-    clamp(12px, 0.68vw, 26px);
-
+  font-size: clamp(12px, 0.68vw, 26px);
   font-weight: 800;
-
   letter-spacing: 0.14em;
-
   white-space: nowrap;
-
   z-index: 2;
 }
 
@@ -858,8 +849,10 @@ news-ticker {
   align-items: center;
   height: 100%;
   width: max-content;
+  gap: clamp(24px, 1.4vw, 52px);
+  /* NEW: equal spacing on both sides of separator */
+  /* animation: newsScroll 320s linear infinite; */
 
-  animation: newsScroll 320s linear infinite;
 }
 
 
@@ -874,7 +867,6 @@ news-ticker {
   display: inline-flex;
   align-items: center;
   gap: clamp(10px, 0.5vw, 20px);
-  padding: 0 clamp(24px, 1.4vw, 52px);
   color: var(--text-color);
   text-decoration: none;
   font-size: clamp(18px, 1vw, 38px);
@@ -904,10 +896,15 @@ news-ticker {
 
 
 .news-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--accent-dim);
+  min-width: 1em;
+  line-height: 1;
 
-  margin:
-    0 clamp(10px, 0.5vw, 20px);
+  /* margin removed — gap on .news-track now provides symmetric spacing */
+
 }
 
 

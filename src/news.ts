@@ -20,7 +20,7 @@ export type NewsPayload = {
 };
 
 const CACHE_TTL_MS = 10 * 60_000; // 10 minutes
-const MAX_ITEMS = 40;
+const MAX_ITEMS = 120;
 
 type FeedConfig = {
     name: string;
@@ -36,15 +36,43 @@ type FeedConfig = {
  * Yahoo Finance also provides RSS feeds, but its terms require
  * attribution and linking to the original article.
  */
-const FEEDS: FeedConfig[] = [
-    {
-        name: "Investing.com",
-        url: "https://www.investing.com/rss/news.rss",
-    },
 
+const FEEDS: FeedConfig[] = [
+    // {
+    //     name: "Yahoo Finance",
+    //     url: "https://finance.yahoo.com/news/rssindex",
+    // },
     {
-        name: "Yahoo Finance",
-        url: "https://finance.yahoo.com/news/rssindex",
+        name: "NPR",
+        url: "https://feeds.npr.org/1006/rss.xml",
+    },
+    {
+        name: "NY Times",
+        url: "https://www.nytimes.com/svc/collections/v1/publish/https://www.nytimes.com/section/business/economy/rss.xml",
+    },
+    {
+        name: "CNBC",
+        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
+    },
+    {
+        name: "CNBC Intl",
+        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100727362",
+    },
+    {
+        name: "CNBC Europe",
+        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19794221"
+    },
+    {
+        name: "CNBC Economy",
+        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258"
+    },
+    {
+        name: "CNBC Business",
+        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147"
+    },
+    {
+        name: "CNBC Finance",
+        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
     },
 ];
 
@@ -60,15 +88,53 @@ let cachedAt = 0;
 /* XML helpers                                                                */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Named entities we handle explicitly, beyond the 5 XML predefined ones.
+ * These cover the smart-quote / dash / ellipsis entities that some feeds
+ * (HTML-flavored RSS descriptions in particular) emit as named refs
+ * instead of numeric refs.
+ */
+const NAMED_ENTITIES: Record<string, string> = {
+    quot: '"',
+    apos: "'",
+    lt: "<",
+    gt: ">",
+    nbsp: "\u00A0",
+    hellip: "\u2026", // …
+    mdash: "\u2014",  // —
+    ndash: "\u2013",  // –
+    lsquo: "\u2018",  // '
+    rsquo: "\u2019",  // '
+    ldquo: "\u201C",  // "
+    rdquo: "\u201D",  // "
+    // NOTE: "amp" is intentionally excluded here — it is decoded
+    // separately, and LAST, to avoid double-unescaping (see below).
+};
+
 function decodeXml(value: string): string {
     return value
+        // Unwrap CDATA sections first.
         .replace(/<!\[CDATA\[(.*?)\]\]>/gs, "$1")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&#x27;/g, "'");
+
+        // Numeric character references: &#8217; and &#x2019;
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) =>
+            String.fromCodePoint(parseInt(hex, 16))
+        )
+        .replace(/&#(\d+);/g, (_, dec: string) =>
+            String.fromCodePoint(parseInt(dec, 10))
+        )
+
+        // Named entities EXCEPT &amp; — decoded first.
+        .replace(
+            /&(quot|apos|lt|gt|nbsp|hellip|mdash|ndash|lsquo|rsquo|ldquo|rdquo);/g,
+            (_, name: string) => NAMED_ENTITIES[name]
+        )
+
+        // &amp; must be decoded LAST. Otherwise something encoded as
+        // "&amp;lt;" (a literal "&lt;" string) would first become "&lt;"
+        // in the &amp; pass and then get wrongly decoded to "<" — a
+        // double-unescape that corrupts the original text.
+        .replace(/&amp;/g, "&");
 }
 
 
