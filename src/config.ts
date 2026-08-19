@@ -81,7 +81,7 @@ export type Config = {
 
 export const config: Config = {
   // Rotation & animation
-  rotationIntervalMs: 10_000,
+  rotationIntervalMs: 30_000,
   transitionDurationMs: 700, // keep within ~600-800ms
 
   // Backend API behaviour
