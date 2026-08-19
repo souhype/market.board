@@ -30,18 +30,15 @@ type FeedConfig = {
 /**
  * Keep this list relatively conservative.
  *
- * Investing.com officially provides RSS feeds for financial news,
- * stocks, forex, commodities, bonds and macro.
- *
- * Yahoo Finance also provides RSS feeds, but its terms require
- * attribution and linking to the original article.
+ * Yahoo Finance requires attribution and linking to the original article.
+ * NPR, NYT, and CNBC feeds are public RSS/Atom feeds — same attribution
+ * approach applies (source name + link) for all of them.
  */
-
 const FEEDS: FeedConfig[] = [
-    // {
-    //     name: "Yahoo Finance",
-    //     url: "https://finance.yahoo.com/news/rssindex",
-    // },
+    {
+        name: "Yahoo Finance",
+        url: "https://finance.yahoo.com/news/rssindex",
+    },
     {
         name: "NPR",
         url: "https://feeds.npr.org/1006/rss.xml",
@@ -60,19 +57,19 @@ const FEEDS: FeedConfig[] = [
     },
     {
         name: "CNBC Europe",
-        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19794221"
+        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19794221",
     },
     {
         name: "CNBC Economy",
-        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258"
+        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258",
     },
     {
         name: "CNBC Business",
-        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147"
+        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147",
     },
     {
         name: "CNBC Finance",
-        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
+        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664",
     },
 ];
 
@@ -322,12 +319,26 @@ function deduplicate(
 /* Fetch one feed                                                             */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Fetch a single feed with automatic retry on transient socket errors.
+ *
+ * Bun's fetch() has a known intermittent bug where it throws
+ * "ConnectionClosed: The socket connection was closed unexpectedly" against
+ * otherwise-healthy servers (see oven-sh/bun issues #9881, #12730, #24381).
+ * We retry those specific transient errors with a short backoff, and send
+ * `Connection: close` + `Accept-Encoding: identity` to reduce the odds of
+ * hitting the bug in the first place. Real HTTP errors (404/500) are NOT
+ * retried — only the transient socket-closed signature is.
+ */
 async function fetchFeed(
-    feed: FeedConfig
+    feed: FeedConfig,
+    attempt = 1
 ): Promise<NewsItem[]> {
+    const MAX_ATTEMPTS = 3;
+
     try {
         console.log(
-            `[news] fetching ${feed.name}`
+            `[news] fetching ${feed.name}${attempt > 1 ? ` (attempt ${attempt})` : ""}`
         );
 
         const response = await fetch(feed.url, {
@@ -336,6 +347,10 @@ async function fetchFeed(
                     "application/rss+xml, application/xml, text/xml",
                 "User-Agent":
                     "market.board/1.0 financial-news-reader",
+                // Discourage keep-alive/chunked edge cases that seem to
+                // trigger Bun's "socket connection closed unexpectedly" bug.
+                Connection: "close",
+                "Accept-Encoding": "identity",
             },
 
             // Don't let one broken feed hang the whole function.
@@ -361,11 +376,29 @@ async function fetchFeed(
 
         return items;
     } catch (error) {
+        const message =
+            error instanceof Error ? error.message : String(error);
+
+        // Retry transient socket errors (Bun-specific fetch flakiness),
+        // but don't retry on things like HTTP 4xx/5xx we threw above.
+        const isTransient =
+            message.includes("socket connection was closed") ||
+            message.includes("ConnectionClosed") ||
+            message.includes("ECONNRESET");
+
+        if (isTransient && attempt < MAX_ATTEMPTS) {
+            const backoffMs = 300 * attempt; // 300ms, 600ms
+            console.warn(
+                `[news] ${feed.name} transient error, retrying in ${backoffMs}ms:`,
+                message
+            );
+            await new Promise((r) => setTimeout(r, backoffMs));
+            return fetchFeed(feed, attempt + 1);
+        }
+
         console.warn(
             `[news] ${feed.name} failed:`,
-            error instanceof Error
-                ? error.message
-                : error
+            message
         );
 
         return [];
@@ -379,7 +412,7 @@ async function fetchFeed(
 
 async function fetchAllNews(): Promise<NewsPayload> {
     const results = await Promise.all(
-        FEEDS.map(fetchFeed)
+        FEEDS.map((feed) => fetchFeed(feed))
     );
 
     const allItems = results.flat();

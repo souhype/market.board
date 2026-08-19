@@ -6,7 +6,8 @@
  * Responsibilities:
  *   - Fetch config + market data from the local Bun backend only.
  *   - Hold a small central DashboardState (plain object).
- *   - Compute compositions (20 assets at a time from 40).
+ *   - Compute compositions (20 assets at a time from the full combined set of
+ *     crypto + stocks + indices + commodities).
  *   - Render header / two-column grid / footer via Web Components.
  *   - Rotate compositions and refresh data on independent timers.
  *   - Run a 1s local clock.
@@ -19,8 +20,9 @@
 import {
   compositionCount,
   getComposition,
-  type CryptoAsset,
+  type MarketAsset,
 } from "./compositions";
+import { assetClassBadge } from "./market-types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,7 +46,7 @@ type PublicConfig = {
 };
 
 type DashboardState = {
-  assets: CryptoAsset[];
+  assets: MarketAsset[];
   compositionIndex: number;
   lastUpdated: string | null;
   news: NewsItem[];
@@ -121,7 +123,10 @@ function formatPrice(value: number): string {
   }).format(value);
 }
 
-function formatMarketCap(value: number): string {
+function formatMarketCap(value: number | null): string {
+  // Indices/commodities have no market cap concept — show a neutral dash
+  // instead of a misleading $0 or crashing on Intl.NumberFormat(null).
+  if (value === null) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -159,25 +164,35 @@ function formatUpdated(iso: string | null): string {
 // Web Components
 // ===========================================================================
 
-/** A single crypto row: rank · logo · ticker/name · market cap · price · change. */
+/** A single asset row: rank · logo/badge · ticker/name · market cap · price · change. */
 class CryptoCard extends HTMLElement {
-  set asset(a: CryptoAsset) {
+  set asset(a: MarketAsset) {
     this.render(a);
   }
 
-  private render(a: CryptoAsset) {
+  private render(a: MarketAsset) {
     const cls = changeClass(a.percentChange24h);
     const initial = a.symbol.slice(0, 1).toUpperCase();
+
+    // Crypto assets have a real logoUrl (served locally by the backend);
+    // stocks/indices/commodities have logoUrl === null and always fall back
+    // to the initial-letter bubble instead.
+    const logoImg = a.logoUrl
+      ? `<img src="${a.logoUrl}" alt="" loading="eager"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />`
+      : "";
+    const fallbackStyle = a.logoUrl ? "" : "display:flex;";
+
     this.innerHTML = `
       <span class="cc-rank">${a.rank}</span>
       <span class="cc-logo">
-        <img src="${a.logoUrl}" alt="" loading="eager"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-        <span class="cc-logo-fallback">${initial}</span>
+        ${logoImg}
+        <span class="cc-logo-fallback" style="${fallbackStyle}">${initial}</span>
       </span>
-      <span class="cc-id">
-        <span class="cc-symbol">${a.symbol}</span>
-        <span class="cc-name">${a.name}</span>
+                <span class="cc-id">
+        <span class="cc-symbol">${a.name}</span>
+        <span class="cc-name">${assetClassBadge(a.assetClass)} · ${a.symbol}</span>
+      </span>
       </span>
       <span class="cc-mcap">${formatMarketCap(a.marketCapUsd)}</span>
       <span class="cc-price">${formatPrice(a.priceUsd)}</span>
@@ -186,7 +201,7 @@ class CryptoCard extends HTMLElement {
   }
 }
 
-/** Two-column grid of crypto rows for the current composition. */
+/** Two-column grid of asset rows for the current composition. */
 class MarketGrid extends HTMLElement {
   private left = document.createElement("div");
   private right = document.createElement("div");
@@ -198,13 +213,13 @@ class MarketGrid extends HTMLElement {
   }
 
   /** Render a composition's assets into left/right columns. */
-  show(assets: CryptoAsset[]) {
+  show(assets: MarketAsset[]) {
     const per = cfg.cryptoPerColumn;
     this.fill(this.left, assets.slice(0, per));
     this.fill(this.right, assets.slice(per, per * 2));
   }
 
-  private fill(col: HTMLElement, assets: CryptoAsset[]) {
+  private fill(col: HTMLElement, assets: MarketAsset[]) {
     col.replaceChildren(
       ...assets.map((a) => {
         const card = document.createElement("crypto-card") as CryptoCard;
@@ -230,8 +245,8 @@ class MarketHeader extends HTMLElement {
       <div class="hd-main">
         <div class="hd-brand">
           <h1 class="hd-title">MARKET<span class="dot">.</span>BOARD</h1>
-          <span class="hd-attrib">made by L&amp;S</span>
-          <span class="hd-pill">CRYPTO 24H</span>
+          <span class="hd-attrib">made by L&S</span>
+          <span class="hd-pill">MARKETS 24H</span>
         </div>
         <div class="hd-time">
           <div class="hd-clock" id="clock">--:--:--</div>
@@ -261,7 +276,6 @@ class NewsTicker extends HTMLElement {
   private items: NewsItem[] = [];
 
   // Tune this to taste — higher = faster scroll.
-
   private static readonly PIXELS_PER_SECOND = 90;
 
   connectedCallback() {
@@ -289,12 +303,8 @@ class NewsTicker extends HTMLElement {
     const html = items
       .map(
         (item) => `
-          <a
-            class="news-item"
-            href="${escapeHtml(item.url)}"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <a class="news-item" href="${escapeHtml(item.url)}"
+             target="_blank" rel="noopener noreferrer">
             <span class="news-source">
               ${escapeHtml(item.source)}
             </span>
@@ -329,7 +339,7 @@ function escapeHtml(value: string): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll("'", "&#39;");
 }
 
 
@@ -375,7 +385,6 @@ customElements.define("market-footer", MarketFooter);
 customElements.define("market-board", MarketBoard);
 customElements.define("news-ticker", NewsTicker);
 
-
 // ===========================================================================
 // Application wiring
 // ===========================================================================
@@ -386,133 +395,106 @@ function isStale(): boolean {
   return Date.now() - new Date(state.lastUpdated).getTime() > cfg.staleDataThresholdMs;
 }
 
-/** Render the current composition (no animation). */
 function renderCurrent() {
-  const assets = getComposition(state.assets, state.compositionIndex, cfg.compositionSize);
-  board.grid.show(assets);
+  const count = compositionCount(state.assets.length, cfg.compositionSize);
+  if (state.compositionIndex >= count) state.compositionIndex = 0;
+  board.grid.show(getComposition(state.assets, state.compositionIndex, cfg.compositionSize));
   board.header.setUpdated(state.lastUpdated, isStale());
 }
 
-/** Advance to the next composition with a subtle fade + slide. */
 function rotate() {
   const count = compositionCount(state.assets.length, cfg.compositionSize);
-  if (count <= 1) return; // nothing to rotate
-
-  board.grid.setTransition(true); // fade/slide out
+  if (count <= 1) return;
+  board.grid.setTransition(true);
   setTimeout(() => {
     state.compositionIndex = (state.compositionIndex + 1) % count;
-    renderCurrent(); // swap content while hidden
-    // Next frame: remove the outgoing class to fade/slide back in.
+    renderCurrent();
     requestAnimationFrame(() =>
       requestAnimationFrame(() => board.grid.setTransition(false))
     );
   }, cfg.transitionDurationMs);
 }
 
-/** Fetch the latest market payload from the local backend. */
 async function refreshData() {
   try {
     const res = await fetch("/api/market", { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const payload = (await res.json()) as { assets: CryptoAsset[]; lastUpdated: string | null };
+    const payload = (await res.json()) as { assets: MarketAsset[]; lastUpdated: string | null };
     if (Array.isArray(payload.assets) && payload.assets.length > 0) {
       state.assets = payload.assets;
       state.lastUpdated = payload.lastUpdated;
-      // Update the visible composition in a controlled way (no dramatic swap).
       renderCurrent();
     }
   } catch (err) {
-    // Fail gracefully: keep showing whatever we already have.
     console.warn("[frontend] market refresh failed:", err);
   }
 }
 
 async function refreshNews() {
   try {
-    const res = await fetch("/api/news", {
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
-    const payload =
-      (await res.json()) as NewsPayload;
-
+    const res = await fetch("/api/news", { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const payload = (await res.json()) as NewsPayload;
     if (Array.isArray(payload.items)) {
       state.news = payload.items;
       board.footer.setNews(state.news);
     }
   } catch (err) {
-    console.warn(
-      "[frontend] news refresh failed:",
-      err
-    );
+    console.warn("[frontend] news refresh failed:", err);
   }
 }
-
 
 async function loadConfig() {
   try {
     const res = await fetch("/api/config", { cache: "no-store" });
     if (res.ok) cfg = { ...cfg, ...(await res.json()) };
   } catch {
-    /* keep fallback config */
+    // Keep the local fallback configuration.
   }
   applyConfigVars();
 }
 
-/** Push config-driven layout/typography values into CSS custom properties. */
 function applyConfigVars() {
   const root = document.documentElement.style;
   root.setProperty("--transition-duration", `${cfg.transitionDurationMs}ms`);
-  const L = cfg.layout || {};
-  const T = cfg.typography || {};
-  const set = (name: string, v?: string) => v && root.setProperty(name, v);
-  set("--header-height", L.headerHeight);
-  set("--footer-height", L.footerHeight);
-  set("--grid-gap", L.gridGap);
-  set("--card-padding", L.cardPadding);
-  set("--title-font-size", T.titleFontSize);
-  set("--subtitle-font-size", T.subtitleFontSize);
-  set("--clock-font-size", T.clockFontSize);
-  set("--crypto-name-font-size", T.cryptoNameFontSize);
-  set("--price-font-size", T.priceFontSize);
-  set("--market-cap-font-size", T.marketCapFontSize);
-  set("--change-font-size", T.changeFontSize);
+  const set = (name: string, value?: string) => value && root.setProperty(name, value);
+  set("--header-height", cfg.layout.headerHeight);
+  set("--footer-height", cfg.layout.footerHeight);
+  set("--grid-gap", cfg.layout.gridGap);
+  set("--card-padding", cfg.layout.cardPadding);
+  set("--title-font-size", cfg.typography.titleFontSize);
+  set("--subtitle-font-size", cfg.typography.subtitleFontSize);
+  set("--clock-font-size", cfg.typography.clockFontSize);
+  set("--crypto-name-font-size", cfg.typography.cryptoNameFontSize);
+  set("--price-font-size", cfg.typography.priceFontSize);
+  set("--market-cap-font-size", cfg.typography.marketCapFontSize);
+  set("--change-font-size", cfg.typography.changeFontSize);
 }
 
 function startClock() {
   const tick = () => board.header.setClock(formatClock(new Date()));
   tick();
-  setInterval(tick, 1000);
+  setInterval(tick, 1_000);
 }
 
 async function main() {
   board = document.createElement("market-board") as MarketBoard;
   document.body.appendChild(board);
-  // Ensure children exist before first render.
   await Promise.resolve();
-
   await loadConfig();
   startClock();
   await refreshData();
   await refreshNews();
   renderCurrent();
-
   setInterval(rotate, cfg.rotationIntervalMs);
   setInterval(refreshData, cfg.apiRefreshIntervalMs);
-
-  // News is refreshed independently from market data.
   setInterval(refreshNews, 15 * 60_000);
 }
 
-// Only auto-run in the browser (import.meta.main guards Bun test imports).
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", main);
   } else {
-    main();
+    void main();
   }
 }

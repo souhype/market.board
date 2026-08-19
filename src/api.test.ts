@@ -77,6 +77,8 @@ test("normalizeMarketData produces sorted, minimal assets", () => {
   expect(Object.keys(a).sort()).toEqual(
     [
       "id",
+      "cmcId",
+      "assetClass",
       "logoUrl",
       "marketCapUsd",
       "name",

@@ -15,14 +15,15 @@ import {
 
 function makeAssets(n: number): CryptoAsset[] {
   return Array.from({ length: n }, (_, i) => ({
-    id: i + 1,
+    id: `crypto:${i + 1}`,
     rank: i + 1,
+    assetClass: "crypto",
     name: `Coin ${i + 1}`,
     symbol: `C${i + 1}`,
     priceUsd: 1,
     marketCapUsd: 1,
     percentChange24h: 0,
-    logoUrl: "",
+    logoUrl: null,
   }));
 }
 

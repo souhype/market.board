@@ -12,6 +12,12 @@
  * `GET /api/config` so there is exactly one source of truth.
  */
 
+/** A symbol plus the human-readable label to show for it. */
+export type SymbolConfig = {
+  symbol: string; // e.g. "AAPL" or "SPY"
+  name: string;   // e.g. "Apple" or "S&P 500 (SPY)"
+};
+
 export type Config = {
   // ---- Rotation & animation -------------------------------------------------
   /** How long a composition stays on screen before rotating (ms). */
@@ -20,20 +26,31 @@ export type Config = {
   transitionDurationMs: number;
 
   // ---- Backend API behaviour ------------------------------------------------
-  /** How often the backend refreshes market data from CoinMarketCap (ms). */
+  /** How often the backend refreshes market data from all providers (ms). */
   apiRefreshIntervalMs: number;
   /** Number of *retries* after the first attempt fails (total = 1 + retries). */
   apiRetryCount: number;
-  /** Per-request timeout for the CoinMarketCap fetch (ms). */
+  /** Per-request timeout for provider fetches (ms). */
   apiTimeoutMs: number;
 
   // ---- Data shape -----------------------------------------------------------
-  /** Total assets to fetch/display (ranks 1..cryptoTotal). */
+  /** Total crypto assets to fetch/display (ranks 1..cryptoTotal). */
   cryptoTotal: number;
   /** Assets shown per column. */
   cryptoPerColumn: number;
   /** Assets shown on screen at once (two columns => 2 * cryptoPerColumn). */
   compositionSize: number;
+
+  // ---- Additional asset classes (Finnhub) -----------------------------------
+  // Finnhub's free /quote endpoint serves ordinary US equities at 60 req/min.
+  // Indices and commodities use ETF PROXIES because raw index symbols (^GSPC)
+  // and commodity pairs (XAU/USD) are premium-locked on the free tier.
+  /** Stock symbols + display names. */
+  stockSymbols: SymbolConfig[];
+  /** Index ETF proxies (SPY -> S&P 500, QQQ -> Nasdaq 100, DIA -> Dow). */
+  indexSymbols: SymbolConfig[];
+  /** Commodity ETF proxies (GLD -> gold, SLV -> silver, USO -> WTI oil...). */
+  commoditySymbols: SymbolConfig[];
 
   // ---- Layout dimensions ----------------------------------------------------
   headerHeight: string;
@@ -64,7 +81,7 @@ export type Config = {
 
 export const config: Config = {
   // Rotation & animation
-  rotationIntervalMs: 60_000,
+  rotationIntervalMs: 10_000,
   transitionDurationMs: 700, // keep within ~600-800ms
 
   // Backend API behaviour
@@ -73,9 +90,59 @@ export const config: Config = {
   apiTimeoutMs: 10_000,
 
   // Data shape
-  cryptoTotal: 40,
+  // 20 crypto = exactly one page, so the rotation reaches stocks/indices/
+  // commodities on the very next page instead of burying them behind crypto.
+  cryptoTotal: 20,
   cryptoPerColumn: 10,
   compositionSize: 20,
+
+  // Additional asset classes (Finnhub, via ETF proxies for indices/commodities)
+  stockSymbols: [
+    { symbol: "NVDA", name: "NVIDIA" },
+    { symbol: "AAPL", name: "Apple" },
+    { symbol: "GOOGL", name: "Alphabet" },
+    { symbol: "MSFT", name: "Microsoft" },
+    { symbol: "AMZN", name: "Amazon" },
+    { symbol: "TSM", name: "Taiwan Semiconductor" },
+    { symbol: "SPCX", name: "SpaceX" },
+    { symbol: "AVGO", name: "Broadcom" },
+    { symbol: "META", name: "Meta Platforms" },
+    { symbol: "TSLA", name: "Tesla" },
+    { symbol: "LLY", name: "Eli Lilly" },
+    { symbol: "BRK.B", name: "Berkshire Hathaway" },
+    { symbol: "JPM", name: "JPMorgan Chase" },
+    { symbol: "V", name: "Visa" },
+    { symbol: "XOM", name: "ExxonMobil" },
+    { symbol: "MA", name: "Mastercard" },
+    { symbol: "ORCL", name: "Oracle" },
+    { symbol: "WMT", name: "Walmart" },
+    { symbol: "UNH", name: "UnitedHealth Group" },
+    { symbol: "COST", name: "Costco Wholesale" },
+  ],
+  indexSymbols: [
+    { symbol: "SPY", name: "S&P 500 (SPY)" },
+    { symbol: "QQQ", name: "Nasdaq 100 (QQQ)" },
+    { symbol: "DIA", name: "Dow Jones Industrial Average (DIA)" },
+    { symbol: "IWM", name: "Russell 2000 (IWM)" },
+    { symbol: "VTI", name: "Vanguard Total Stock Market (VTI)" },
+    { symbol: "EEM", name: "MSCI Emerging Markets (EEM)" },
+    { symbol: "EFA", name: "MSCI EAFE (EFA)" },
+    { symbol: "AGG", name: "US Aggregate Bond (AGG)" },
+    { symbol: "GLD", name: "SPDR Gold Shares (GLD)" },
+    { symbol: "VNQ", name: "Vanguard Real Estate (VNQ)" },
+  ],
+  commoditySymbols: [
+    { symbol: "GLD", name: "Gold (GLD)" },
+    { symbol: "SLV", name: "Silver (SLV)" },
+    { symbol: "USO", name: "Crude Oil (USO)" },
+    { symbol: "UNG", name: "Natural Gas (UNG)" },
+    { symbol: "DBA", name: "Agriculture (DBA)" },
+    { symbol: "CORN", name: "Corn (CORN)" },
+    { symbol: "WEAT", name: "Wheat (WEAT)" },
+    { symbol: "SOYB", name: "Soybeans (SOYB)" },
+    { symbol: "CPER", name: "Copper (CPER)" },
+    { symbol: "COCO", name: "Cocoa (COCO)" },
+  ],
 
   // Layout dimensions
   headerHeight: "clamp(90px, 3.9vw, 150px)",
@@ -92,7 +159,6 @@ export const config: Config = {
   marketCapFontSize: "clamp(14px, 0.73vw, 28px)",
   changeFontSize: "clamp(17px, 0.89vw, 34px)",
 
-
   // Behaviour flags
   staleDataIndicatorEnabled: true,
   staleDataThresholdMs: 5 * 60_000, // 5 minutes
@@ -105,8 +171,6 @@ export const config: Config = {
 
 /**
  * The subset of configuration that is safe and useful to send to the browser.
- * Deliberately excludes nothing secret (config has no secrets) but keeps the
- * frontend payload focused on presentation + timing.
  */
 export function publicConfig(c: Config = config) {
   return {

@@ -7,26 +7,19 @@
  *   - Build and send the single `listings/latest` request (limit = cryptoTotal).
  *   - Retry on failure (native async, no libraries).
  *   - Validate the response before it is allowed anywhere near the cache.
- *   - Normalize the raw CMC payload into the minimal `CryptoAsset` shape the
- *     frontend consumes.
+ *   - Normalize the raw CMC payload into the shared `MarketAsset` shape the
+ *     frontend consumes (assetClass: "crypto").
  *
  * The CoinMarketCap API key lives only here (passed in from app.ts, sourced from
  * .env). It is never returned to the browser and never logged.
  */
 
 import { config, type Config } from "./config";
+import type { MarketAsset } from "./market-types";
 
-/** The minimal, frontend-facing representation of a single asset. */
-export type CryptoAsset = {
-  id: number;
-  rank: number;
-  name: string;
-  symbol: string;
-  priceUsd: number;
-  marketCapUsd: number;
-  percentChange24h: number;
-  logoUrl: string;
-};
+// Re-exported so any file that still imports `CryptoAsset` from api.ts keeps
+// compiling while you migrate call sites over to `MarketAsset`.
+export type CryptoAsset = MarketAsset;
 
 const CMC_LISTINGS_URL =
   "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest";
@@ -104,17 +97,19 @@ export function cmcLogoUrl(id: number): string {
 }
 
 /**
- * Normalize a validated CMC payload into an ordered list of `CryptoAsset`,
- * sorted ascending by CMC rank (1..cryptoTotal). The frontend never re-ranks;
- * ordering is owned here.
+ * Normalize a validated CMC payload into an ordered list of `MarketAsset`
+ * (assetClass: "crypto"), sorted ascending by CMC rank (1..cryptoTotal). The
+ * frontend never re-ranks; ordering is owned here.
  */
-export function normalizeMarketData(raw: any, c: Config = config): CryptoAsset[] {
+export function normalizeMarketData(raw: any, c: Config = config): MarketAsset[] {
   const rows: any[] = raw.data;
-  const assets: CryptoAsset[] = rows.slice(0, c.cryptoTotal).map((r) => {
+  const assets: MarketAsset[] = rows.slice(0, c.cryptoTotal).map((r) => {
     const quote = r.quote.USD;
     return {
-      id: r.id,
+      id: String(r.id),        // generic string key, consistent with other asset classes
+      cmcId: r.id,              // numeric CMC id — used only by cache.ts logo caching
       rank: r.cmc_rank,
+      assetClass: "crypto" as const,
       name: r.name,
       symbol: r.symbol,
       priceUsd: quote.price,
@@ -152,7 +147,7 @@ async function fetchOnce(apiKey: string, c: Config): Promise<unknown> {
 }
 
 export type FetchResult =
-  | { ok: true; assets: CryptoAsset[] }
+  | { ok: true; assets: MarketAsset[] }
   | { ok: false; error: string };
 
 /**

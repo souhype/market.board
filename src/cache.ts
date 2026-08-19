@@ -3,15 +3,19 @@
  * -----------------------------------------------------------------------------
  * Two independent caches, both owned by the backend:
  *
- *   1. Market data cache  — last-known-good CryptoAsset[] + fetch timestamp.
+ *   1. Market data cache  — last-known-good MarketAsset[] (crypto + stocks +
+ *                           indices + commodities) + fetch timestamp.
  *                           Persisted to disk so a backend restart recovers the
  *                           last valid dataset. Never expires: it is only ever
  *                           replaced by another *valid* dataset.
  *
  *   2. Logo cache         — PNG files downloaded from CoinMarketCap, stored on
  *                           disk and served locally so the browser never fetches
- *                           remote logos. Best-effort: a failed download never
- *                           blocks an asset from displaying.
+ *                           remote logos. Crypto-only: stocks/indices/
+ *                           commodities have no CMC logo CDN entry, so their
+ *                           `logoUrl` is null and they are skipped here.
+ *                           Best-effort: a failed download never blocks an
+ *                           asset from displaying.
  *
  * Uses only Bun's native filesystem APIs. No external caching or fs libraries.
  */
@@ -20,7 +24,7 @@ import { mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { CryptoAsset } from "./api";
+import type { MarketAsset } from "./market-types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, "..", "data");
@@ -29,7 +33,7 @@ const LOGO_DIR = join(DATA_DIR, "logos");
 
 /** Shape persisted to disk. Deliberately contains no secrets. */
 export type MarketCache = {
-  assets: CryptoAsset[];
+  assets: MarketAsset[];
   fetchedAt: string; // ISO timestamp of the successful fetch
   version: 1;
 };
@@ -53,7 +57,7 @@ export function getMarketCache(): MarketCache | null {
  * This is the *only* way the cache is written, guaranteeing it never holds
  * invalid data.
  */
-export async function setMarketCache(assets: CryptoAsset[]): Promise<void> {
+export async function setMarketCache(assets: MarketAsset[]): Promise<void> {
   current = { assets, fetchedAt: new Date().toISOString(), version: 1 };
   await persistMarketCache(current);
 }
@@ -93,22 +97,22 @@ export async function loadMarketCache(): Promise<MarketCache | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Logo cache
+// Logo cache (crypto-only — see file header)
 // ---------------------------------------------------------------------------
 
-/** Local relative URL the frontend uses for a given asset id. */
-export function localLogoUrl(id: number): string {
-  return `/assets/logos/${id}.png`;
+/** Local relative URL the frontend uses for a given crypto asset's CMC id. */
+export function localLogoUrl(cmcId: number): string {
+  return `/assets/logos/${cmcId}.png`;
 }
 
 /** Absolute on-disk path for a cached logo. */
-export function logoDiskPath(id: number): string {
-  return join(LOGO_DIR, `${id}.png`);
+export function logoDiskPath(cmcId: number): string {
+  return join(LOGO_DIR, `${cmcId}.png`);
 }
 
-/** True if the logo for `id` is already cached on disk. */
-export function hasLogo(id: number): boolean {
-  return existsSync(logoDiskPath(id));
+/** True if the logo for `cmcId` is already cached on disk. */
+export function hasLogo(cmcId: number): boolean {
+  return existsSync(logoDiskPath(cmcId));
 }
 
 /**
@@ -117,11 +121,11 @@ export function hasLogo(id: number): boolean {
  *   - swallows any error (returns false) so callers never fail because of it.
  */
 export async function ensureLogo(
-  id: number,
+  cmcId: number,
   remoteUrl: string,
   timeoutMs = 10_000
 ): Promise<boolean> {
-  if (hasLogo(id)) return true;
+  if (hasLogo(cmcId)) return true;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -129,7 +133,7 @@ export async function ensureLogo(
     if (!res.ok) return false;
     const bytes = await res.arrayBuffer();
     if (bytes.byteLength === 0) return false;
-    await Bun.write(logoDiskPath(id), bytes);
+    await Bun.write(logoDiskPath(cmcId), bytes);
     return true;
   } catch {
     return false;
@@ -140,11 +144,21 @@ export async function ensureLogo(
 
 /**
  * Cache logos for a batch of assets in parallel. Never throws.
+ * Only crypto assets carry a `cmcId` + remote `logoUrl`; stocks, indices, and
+ * commodities are skipped (their `logoUrl` is null — frontend shows an
+ * initial-letter fallback bubble for those instead).
  * Returns the number of logos now available locally.
  */
-export async function ensureLogos(assets: CryptoAsset[]): Promise<number> {
+export async function ensureLogos(assets: MarketAsset[]): Promise<number> {
+  const cryptoWithLogos = assets.filter(
+    (a): a is MarketAsset & { cmcId: number; logoUrl: string } =>
+      a.assetClass === "crypto" &&
+      typeof a.cmcId === "number" &&
+      typeof a.logoUrl === "string"
+  );
+
   const results = await Promise.all(
-    assets.map((a) => ensureLogo(a.id, a.logoUrl))
+    cryptoWithLogos.map((a) => ensureLogo(a.cmcId, a.logoUrl))
   );
   return results.filter(Boolean).length;
 }
