@@ -200,38 +200,50 @@ export async function fetchFinnhubAssets(
 ): Promise<FinnhubFetchResult> {
     const timeoutMs = opts.timeoutMs ?? 8_000;
     const includeMarketCap = feed.assetClass === "stock";
-    const assets: MarketAsset[] = [];
 
-    // Fetch a profile for ALL asset classes now (for logos); only stocks
-    // actually keep the market cap value.
-
-    for (let i = 0; i < feed.symbols.length; i++) {
-        const { symbol, name } = feed.symbols[i];
-        try {
+    // Fetch every symbol in PARALLEL (Finnhub's 60/min tolerates a burst this
+    // size easily). Sequential + delay() was too slow and timed out Vercel's
+    // 60s function limit once profile fetches doubled the request count.
+    const settled = await Promise.allSettled(
+        feed.symbols.map(async ({ symbol, name }) => {
             const quote = await fetchOneQuote(symbol, apiKey, timeoutMs);
-            if (quote) {
-                const profile = await fetchProfile(symbol, apiKey, timeoutMs);
+            if (!quote) return null;
 
-                assets.push({
-                    id: `${feed.assetClass}:${symbol}`,
-                    rank: rankOffset + assets.length + 1,
-                    assetClass: feed.assetClass,
-                    name,
-                    symbol,
-                    priceUsd: quote.c,
-                    marketCapUsd: includeMarketCap ? profile.marketCapUsd : null,
-                    percentChange24h: quote.dp,
-                    logoUrl: profile.logoUrl, // now populated for all classes
-                });
-            }
-        } catch (err) {
-            // ...unchanged 429 + non-fatal handling...
+            const profile = await fetchProfile(symbol, apiKey, timeoutMs);
+
+            const asset: MarketAsset = {
+                id: `${feed.assetClass}:${symbol}`,
+                rank: 0, // assigned after, to keep order stable
+                assetClass: feed.assetClass,
+                name,
+                symbol,
+                priceUsd: quote.c,
+                marketCapUsd: includeMarketCap ? profile.marketCapUsd : null,
+                percentChange24h: quote.dp,
+                logoUrl: profile.logoUrl,
+            };
+            return asset;
+        })
+    );
+
+    // Detect a rate-limit among the failures.
+    const rateLimited = settled.some(
+        (r) => r.status === "rejected" && r.reason instanceof RateLimitError
+    );
+
+    // Keep successful assets in config order, then assign ranks.
+    const assets: MarketAsset[] = [];
+    for (const r of settled) {
+        if (r.status === "fulfilled" && r.value) {
+            r.value.rank = rankOffset + assets.length + 1;
+            assets.push(r.value);
         }
-        if (i < feed.symbols.length - 1) await delay(120);
     }
 
     if (assets.length === 0) {
-        return { ok: false, error: `no usable ${feed.assetClass} quotes from Finnhub` };
+        return rateLimited
+            ? { ok: false, error: `${feed.assetClass}: rate limited (HTTP 429)`, rateLimited: true }
+            : { ok: false, error: `no usable ${feed.assetClass} quotes from Finnhub` };
     }
 
     return { ok: true, assets };
